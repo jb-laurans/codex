@@ -1,11 +1,11 @@
 // app/scene/[id].tsx
 // Écran de scène : image zoomable + points d'intérêt cliquables
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Dimensions, Image, Linking, Modal,
+  Alert, Animated, AppState, Dimensions, Image, Linking, Modal,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -261,8 +261,13 @@ function DiscoveryModal({
                   alignItems: 'center',
                   marginBottom: 12,
                 }}
-                onPress={() => {
+              
+
+                onPress={async () => {
                   if (hotspot.discovery?.streetViewUrl) {
+                    // Enregistre l'instant du clic
+                    await AsyncStorage.setItem('streetViewTime', Date.now().toString());
+                    // Ouvre Street View
                     Linking.openURL(hotspot.discovery.streetViewUrl);
                   }
                 }}
@@ -292,13 +297,48 @@ export default function SceneScreen() {
   const [activeHotspot, setActiveHotspot] = useState<typeof SCENES[0]['hotspots'][0] | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  if (!scene) {
+  useEffect(() => {
+    const checkHackerReturn = async () => {
+      try {
+        const streetViewTime = await AsyncStorage.getItem('streetViewTime');
+        if (streetViewTime) {
+          const elapsed = Date.now() - parseInt(streetViewTime);
+          if (elapsed >= 60000) { // 1 minute ou plus
+            Alert.alert(
+              "📡 HACKER CONNECTÉ",
+              "Je vois que vous avez visité la scène de crime... Je sais où vous êtes. Restez vigilant.",
+              [{ text: "OK" }]
+            );
+            // Une fois l'alerte affichée, on efface la marque
+            await AsyncStorage.removeItem('streetViewTime');
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors de la vérification du hacker", error);
+      }
+    };
+
+    // Écoute les changements d'état de l'app (premier plan / arrière-plan)
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkHackerReturn();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []); 
+
+
+   
+    if (!scene) {
     return (
       <SafeAreaView style={styles.container } edges={['top', 'bottom']}>
         <Text style={{ color: '#fff', padding: 20 }}>Scène introuvable</Text>
       </SafeAreaView>
     );
   }
+
+  
 
   const handleHotspotPress = (hotspot: typeof scene.hotspots[0]) => {
     setActiveHotspot(hotspot);

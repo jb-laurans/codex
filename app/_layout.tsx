@@ -8,6 +8,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { GameProvider } from '../context/GameContext';
 
+
+
+
 export const unstable_settings = {
   anchor: '(tabs)',
 };

@@ -84,6 +84,8 @@ export default function InvestigationScreen() {
   const router = useRouter();
   const { state, dispatch  } = useGame();
 
+  
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
