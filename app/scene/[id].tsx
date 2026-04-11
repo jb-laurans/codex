@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions, Image, Modal,
+  Dimensions, Image, Linking, Modal,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -222,6 +222,10 @@ function DiscoveryModal({
   if (!hotspot) return null;
   const isNew = !!hotspot.discovery && !alreadySeen;
 
+
+
+
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
@@ -246,6 +250,28 @@ function DiscoveryModal({
               <Text style={styles.modalDiscoveryContent}>{hotspot.discovery.content}</Text>
             </View>
           )}
+          {hotspot.discovery?.type === 'location' &&
+            hotspot.discovery.lat &&
+            hotspot.discovery.lng && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#2c3e50',
+                  borderRadius: 12,
+                  padding: 14,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+                onPress={() => {
+                  if (hotspot.discovery?.streetViewUrl) {
+                    Linking.openURL(hotspot.discovery.streetViewUrl);
+                  }
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>
+                  🌍 Voir le lieu réel (Street View)
+                </Text>
+              </TouchableOpacity>
+            )}
 
           <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose}>
             <Text style={styles.modalCloseBtnText}>Continuer l'enquête →</Text>

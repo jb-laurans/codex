@@ -9,6 +9,7 @@ export type Discovery = {
   id: string;
   type: 'clue' | 'evidence' | 'location' | 'person' | 'object';
   title: string;
+  streetViewUrl?:string,
   layer:'investigation' | 'treasure';
   content: string;
   emoji: string;
