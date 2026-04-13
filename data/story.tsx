@@ -28,6 +28,20 @@ export type Hotspot = {
   emoji?: string;
 };
 
+export type ForegroundLayer = {
+  imageUri: any;
+  // Position et taille sur l'écran (en %)
+  top?: number;   left?: number;
+  right?: number; bottom?: number;
+  width?: number; height?: number;
+  // Rendu
+  opacity?: number;
+  blurRadius?: number;  // flou natif de <Image>
+  // Animation
+  animation?: 'sway' | 'float' | 'breathe' | 'drift';
+  animationIntensity?: 'subtle' | 'medium' | 'strong';
+};
+
 // ─── Scène : lieu d'enquête avec image de fond ────────────────
 export type Scene = {
   id: string;
@@ -45,6 +59,7 @@ export type Scene = {
   // Scènes débloquées dès qu'on arrive ici
   autoUnlocks?: string[];
   locked?: boolean;
+  foregroundLayers?: ForegroundLayer[];
 };
 
 // ─── Chapitres ────────────────────────────────────────────────
@@ -69,6 +84,19 @@ export const SCENES: Scene[] = [
   {
     id: 'scene_appartement',
     title: 'L\'appartement',
+    foregroundLayers: [
+    {
+      // Plante au premier plan, bord gauche
+      imageUri: require('../assets/images/scenes/plante.png'),
+      top: -15, right: 20,
+      width: 500, height: 600,
+      opacity: 0.75,
+      blurRadius: 2.5,   // légèrement flou = profondeur de champ
+      animation: 'sway',
+      animationIntensity: 'subtle',
+    },
+
+  ],
     chapter: 'ch1',
     description:
       'Le Pr. Marchand a été retrouvé inanimé ici ce matin. La pièce a été fouillée — mais par qui ?',
@@ -156,11 +184,26 @@ export const SCENES: Scene[] = [
   {
     id: 'scene_bibliotheque',
     title: 'La bibliothèque universitaire',
+    foregroundLayers: [
+    {
+      // Plante au premier plan, bord gauche
+      imageUri: require('../assets/images/scenes/plante.png'),
+      top: -15, right: 20,
+      width: 500, height: 600,
+      opacity: 0.75,
+      blurRadius: 2.5,   // légèrement flou = profondeur de champ
+      animation: 'sway',
+      animationIntensity: 'subtle',
+    },
+
+  ],
     chapter: 'ch1',
     description:
       'Les archives de la faculté d\'archéologie. Les dossiers d\'Émile Marchand y sont conservés.',
     bgColor: '#0f1a0f',
     bgEmoji: '🏫',
+    imageUri: require('../assets/images/scenes/coco.png'),
+    
     hotspots: [
       {
         id: 'hs_dossier_emile',

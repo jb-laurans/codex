@@ -1,6 +1,7 @@
 // app/scene/[id].tsx
 // Écran de scène : image zoomable + points d'intérêt cliquables
 
+import { AnimatedLayer } from '@/components/AnimatedLayer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -14,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGame } from '../../context/GameContext';
-import { SCENES } from '../../data/story';
+import { ForegroundLayer, SCENES } from '../../data/story';
 
 const { width: W, height: H } = Dimensions.get('window');
 const IMAGE_H = H * 0.52;
@@ -31,12 +32,14 @@ const C = {
 function ZoomableSceneImage({
   bgColor,
   bgEmoji,
+  foregroundLayers,
   imageUri, 
   children,
 }: {
   bgColor?: string;
   bgEmoji?: string;
   imageUri?: any;
+  foregroundLayers?: ForegroundLayer[];
   children: React.ReactNode;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -135,6 +138,15 @@ function ZoomableSceneImage({
           
           {/* Les hotspots sont rendus ici, par-dessus l'image */}
           {children}
+
+          {/* Plans animés au premier plan */}
+          {foregroundLayers?.map((layer, i) => (
+            <AnimatedLayer
+              key={i}
+              layer={layer}
+              containerHeight={IMAGE_H}
+            />
+          ))}
         </View>
       </Animated.View>
 
@@ -394,6 +406,7 @@ export default function SceneScreen() {
   bgColor={scene.bgColor} 
   bgEmoji={scene.imageUri ? undefined : scene.bgEmoji}
   imageUri={scene.imageUri}
+  foregroundLayers={scene.foregroundLayers} 
 >
         {scene.hotspots.map(h => (
           <Hotspot
