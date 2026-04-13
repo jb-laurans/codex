@@ -183,12 +183,12 @@ export const SCENES: Scene[] = [
   // ────────────────────────────────────────────────────────────
   {
     id: 'scene_bibliotheque',
-    title: 'La bibliothèque universitaire',
+    title: 'Le cabanon',
     foregroundLayers: [
     {
       // Plante au premier plan, bord gauche
       imageUri: require('../assets/images/scenes/plante.png'),
-      top: -15, right: 20,
+      top: -85, right: 15,
       width: 500, height: 600,
       opacity: 0.75,
       blurRadius: 2.5,   // légèrement flou = profondeur de champ
@@ -199,7 +199,7 @@ export const SCENES: Scene[] = [
   ],
     chapter: 'ch1',
     description:
-      'Les archives de la faculté d\'archéologie. Les dossiers d\'Émile Marchand y sont conservés.',
+      'A propos d\'un fameux trésor enfoui au large du Costa Rica...',
     bgColor: '#0f1a0f',
     bgEmoji: '🏫',
     imageUri: require('../assets/images/scenes/coco.png'),
