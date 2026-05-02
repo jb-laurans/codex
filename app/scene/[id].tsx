@@ -15,10 +15,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGame } from '../../context/GameContext';
-import { ForegroundLayer, SCENES } from '../../data/story';
+import { SCENES } from '../../data/story';
 
 const { width: W, height: H } = Dimensions.get('window');
 const IMAGE_H = H * 0.52;
+
 
 const C = {
   bg: '#0a0a0f', surface: '#12121c', surfaceAlt: '#1a1a28',
@@ -29,91 +30,160 @@ const C = {
 
 // ─── Image zoomable via PanResponder ──────────────────────────
 // (sans librairie externe — fonctionne dans Expo Go natif)
-function ZoomableSceneImage({
-  bgColor,
-  bgEmoji,
-  foregroundLayers,
-  imageUri, 
-  children,
-}: {
-  bgColor?: string;
-  bgEmoji?: string;
-  imageUri?: any;
-  foregroundLayers?: ForegroundLayer[];
-  children: React.ReactNode;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
+function ZoomableSceneImage({ bgColor, bgEmoji, foregroundLayers, imageUri, children }) {
+  const scale      = useRef(new Animated.Value(1)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
+  
 
-  const lastScale   = useRef(1);
-  const lastTX      = useRef(0);
-  const lastTY      = useRef(0);
-  const initialDist = useRef(0);
+  const currentScale = useRef(1);
+  const lastScale    = useRef(1);
+  const initialDist  = useRef(0);
+
+  // Valeurs réelles courantes (évite stopAnimation async)
+  const curTX = useRef(0);
+  const curTY = useRef(0);
+
+  // Gestion transition 2 → 1 doigt dans le même geste
+  const prevTouchCount  = useRef(0);
+  const gsBaseX         = useRef(0);   // gs.dx au moment de la transition
+  const gsBaseY         = useRef(0);
+  const txAtTransition  = useRef(0);   // curTX au moment de la transition
+  const tyAtTransition  = useRef(0);
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  // Helpers qui gardent curTX/curTY synchronisés
+  const setTX = (v: number) => { curTX.current = v; translateX.setValue(v); };
+  const setTY = (v: number) => { curTY.current = v; translateY.setValue(v); };
+
+  const maxForScale = (s: number) => {
+  const scaledWidth = W * s;
+  const scaledHeight = IMAGE_H * s;
+
+  return {
+    x: Math.max(0, (scaledWidth - W) / 2),
+    y: Math.max(0, (scaledHeight - IMAGE_H) / 2),
+  };
+};
+
   const MOVE_THRESHOLD = 6;
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponder:        () => false,
       onStartShouldSetPanResponderCapture: () => false,
+
       onMoveShouldSetPanResponder: (e, gs) => {
-        const touches = e.nativeEvent.touches;
-        if (touches.length === 2) return true;
-        if (lastScale.current > 1) {
+        const n = e.nativeEvent.touches.length;
+        if (n === 2) return true;
+        if (currentScale.current > 1)
           return Math.abs(gs.dx) > MOVE_THRESHOLD || Math.abs(gs.dy) > MOVE_THRESHOLD;
-        }
         return false;
       },
       onMoveShouldSetPanResponderCapture: (e, gs) => {
-        const touches = e.nativeEvent.touches;
-        if (touches.length === 2) return true;
-        if (lastScale.current > 1) {
+        const n = e.nativeEvent.touches.length;
+        if (n === 2) return true;
+        if (currentScale.current > 1)
           return Math.abs(gs.dx) > MOVE_THRESHOLD || Math.abs(gs.dy) > MOVE_THRESHOLD;
-        }
         return false;
       },
+
       onPanResponderGrant: (e) => {
-        if (e.nativeEvent.touches.length === 2) {
-          const t = e.nativeEvent.touches;
-          const dx = t[0].pageX - t[1].pageX;
-          const dy = t[0].pageY - t[1].pageY;
+        const touches = e.nativeEvent.touches;
+        prevTouchCount.current = touches.length;
+        // Baseline au démarrage du geste = position actuelle
+        gsBaseX.current = 0;
+        gsBaseY.current = 0;
+        txAtTransition.current = curTX.current;
+        tyAtTransition.current = curTY.current;
+
+        if (touches.length === 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
           initialDist.current = Math.sqrt(dx * dx + dy * dy);
         }
         translateX.stopAnimation();
         translateY.stopAnimation();
         scale.stopAnimation();
       },
+
       onPanResponderMove: (e, gs) => {
         const touches = e.nativeEvent.touches;
+
+        // ── Pinch (2 doigts) ──────────────────────────────────
         if (touches.length === 2) {
-          const dx = touches[0].pageX - touches[1].pageX;
-          const dy = touches[0].pageY - touches[1].pageY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const newScale = clamp(lastScale.current * (dist / initialDist.current), 1, 4);
+          if (prevTouchCount.current !== 2) {
+            // 1→2 doigts : réinitialiser le pinch
+            const dx = touches[0].pageX - touches[1].pageX;
+            const dy = touches[0].pageY - touches[1].pageY;
+            initialDist.current = Math.sqrt(dx * dx + dy * dy);
+            lastScale.current   = currentScale.current;
+          }
+          prevTouchCount.current = 2;
+
+          const dx      = touches[0].pageX - touches[1].pageX;
+          const dy      = touches[0].pageY - touches[1].pageY;
+          const dist    = Math.sqrt(dx * dx + dy * dy);
+          const newScale = clamp(lastScale.current * (dist / initialDist.current), 1, 12);
+
+          currentScale.current = newScale;
           scale.setValue(newScale);
-        } else if (touches.length === 1 && lastScale.current > 1) {
-          const maxX = (W * (lastScale.current - 1)) / 2;
-          const maxY = (IMAGE_H * (lastScale.current - 1)) / 2;
-          translateX.setValue(clamp(lastTX.current + gs.dx, -maxX, maxX));
-          translateY.setValue(clamp(lastTY.current + gs.dy, -maxY, maxY));
+
+          const { x: maxX, y: maxY } = maxForScale(newScale);
+          setTX(clamp(curTX.current, -maxX, maxX));
+          setTY(clamp(curTY.current, -maxY, maxY));
+
+        // ── Pan (1 doigt) ──────────────────────────────────────
+        } else if (touches.length === 1 && currentScale.current > 1) {
+          if (prevTouchCount.current === 2) {
+            // ← FIX PRINCIPAL : transition 2 → 1 doigt
+            // On fige le baseline ici pour ignorer l'accumulation du pinch
+            gsBaseX.current = gs.dx;
+            gsBaseY.current = gs.dy;
+            txAtTransition.current = curTX.current;
+            tyAtTransition.current = curTY.current;
+          }
+          prevTouchCount.current = 1;
+
+          const s = currentScale.current;
+          const { x: maxX, y: maxY } = maxForScale(s);
+
+          // Delta depuis la transition (et non depuis le début du geste entier)
+          const effectiveDx = gs.dx - gsBaseX.current;
+          const effectiveDy = gs.dy - gsBaseY.current;
+
+          setTX(clamp(txAtTransition.current + effectiveDx, -maxX, maxX));
+          setTY(clamp(tyAtTransition.current + effectiveDy, -maxY, maxY));
         }
       },
+
       onPanResponderRelease: () => {
-        scale.stopAnimation(v => { lastScale.current = v; });
-        translateX.stopAnimation(v => { lastTX.current = v; });
-        translateY.stopAnimation(v => { lastTY.current = v; });
+        // Sauvegarde synchrone (pas de callback async)
+        lastScale.current      = currentScale.current;
+        prevTouchCount.current = 0;
+        gsBaseX.current        = 0;
+        gsBaseY.current        = 0;
+        // curTX / curTY sont déjà à jour, on les réutilise comme baseline
+        txAtTransition.current = curTX.current;
+        tyAtTransition.current = curTY.current;
       },
     })
   ).current;
 
   const resetZoom = () => {
     Animated.parallel([
-      Animated.spring(scale,      { toValue: 1,  useNativeDriver: true }),
-      Animated.spring(translateX, { toValue: 0,  useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0,  useNativeDriver: true }),
-    ]).start(() => { lastScale.current = 1; lastTX.current = 0; lastTY.current = 0; });
+      Animated.spring(scale,      { toValue: 1, useNativeDriver: true }),
+      Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+    ]).start(() => {
+      lastScale.current      = 1;
+      currentScale.current   = 1;
+      curTX.current          = 0;
+      curTY.current          = 0;
+      txAtTransition.current = 0;
+      tyAtTransition.current = 0;
+    });
   };
 
   return (
@@ -121,7 +191,7 @@ function ZoomableSceneImage({
       <Animated.View
         style={[
           styles.imageInner,
-          { transform: [{ scale }, { translateX }, { translateY }] },
+          { transform: [ { translateX }, { translateY },{ scale }] },
         ]}
         {...panResponder.panHandlers}
       >
@@ -129,28 +199,22 @@ function ZoomableSceneImage({
           {imageUri ? (
             <Image
               source={imageUri}
-              style={styles.sceneImage}
+              style={{
+                width: W,
+                height: IMAGE_H,
+                position: 'absolute',
+              }}
               resizeMode="cover"
             />
           ) : bgEmoji ? (
             <Text style={styles.bgEmoji}>{bgEmoji}</Text>
           ) : null}
-          
-          {/* Les hotspots sont rendus ici, par-dessus l'image */}
           {children}
-
-          {/* Plans animés au premier plan */}
           {foregroundLayers?.map((layer, i) => (
-            <AnimatedLayer
-              key={i}
-              layer={layer}
-              containerHeight={IMAGE_H}
-            />
+            <AnimatedLayer key={i} layer={layer} containerHeight={IMAGE_H} />
           ))}
         </View>
       </Animated.View>
-
-      {/* Bouton reset zoom */}
       <TouchableOpacity style={styles.resetZoomBtn} onPress={resetZoom}>
         <Text style={styles.resetZoomText}>↺ Reset zoom</Text>
       </TouchableOpacity>
@@ -169,6 +233,16 @@ function Hotspot({
   onPress: () => void;
 }) {
   const pulse = useRef(new Animated.Value(1)).current;
+  const flashAnim = useRef(new Animated.Value(0)).current;
+
+  const triggerFlash = () => {
+    flashAnim.setValue(1);
+    Animated.timing(flashAnim, {
+      toValue: 0,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  };
 
   React.useEffect(() => {
     if (!clicked) {
@@ -182,6 +256,60 @@ function Hotspot({
   }, [clicked]);
 
   const size = hotspot.size || 52;
+  const isDoor  = hotspot.navigationStyle === 'door';
+  const isArrow = hotspot.navigationStyle === 'arrow';
+  // ── Style PORTE ──────────────────────────────────────────────
+  if (isDoor) {
+    return (
+      <TouchableOpacity
+        style={[
+          styles.hotspot,
+          {
+            left: `${hotspot.x}%`,
+            top:  `${hotspot.y}%`,
+            width: 70, height: 110,
+            marginLeft: -35, marginTop: -55,
+          },
+        ]}
+        onPress={() => { triggerFlash(); onPress(); }}
+        activeOpacity={1}
+      >
+ <Animated.View style={[
+          styles.doorBubble,
+          { opacity: flashAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.7] }) },
+        ]}>          
+          <Text style={styles.doorEmoji}>{hotspot.emoji || '🚪'}</Text>
+          <Text style={styles.doorLabel}>{hotspot.label}</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  }
+
+  // ── Style FLÈCHE ─────────────────────────────────────────────
+  if (isArrow) {
+    return (
+      <TouchableOpacity
+        style={[
+          styles.hotspot,
+          {
+            left: `${hotspot.x}%`,
+            top:  `${hotspot.y}%`,
+            width: 52, height: 52,
+            marginLeft: -26, marginTop: -26,
+          },
+        ]}
+        onPress={() => { triggerFlash(); onPress(); }}
+        activeOpacity={1}
+      >
+        <Animated.View style={[
+          styles.arrowBubble,
+          { opacity: flashAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.8] }) },
+        ]}>
+          <Text style={{ fontSize: 26 }}>{hotspot.emoji || '➡️'}</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -196,25 +324,21 @@ function Hotspot({
           marginTop: -size / 2,
         },
       ]}
-      onPress={onPress}
-      activeOpacity={0.7}
+      onPress={() => { triggerFlash(); onPress(); }}
+      activeOpacity={1}
     >
-      <Animated.View
-        style={[
-          styles.hotspotBubble,
-          { width: size, height: size, borderRadius: size / 2 },
-          clicked
-            ? { borderColor: C.success, backgroundColor: 'rgba(39,174,96,0.25)' }
-            : { transform: [{ scale: pulse }] },
-        ]}
-      >
-        <Text style={{ fontSize: size * 0.45 }}>{hotspot.emoji || '👁'}</Text>
-        {clicked && (
-          <View style={styles.hotspotCheck}>
-            <Text style={{ fontSize: 8, color: '#fff' }}>✓</Text>
-          </View>
-        )}
-      </Animated.View>
+            <View style={[styles.hotspotHitArea, { width: size, height: size, borderRadius: size / 2 }]} />
+
+      <Animated.View style={[
+        styles.hotspotFlash,
+        { width: size, height: size, borderRadius: size / 2 },
+        { opacity: flashAnim },
+      ]} />
+
+        {/* Checkmark discret si déjà trouvé */}
+      {clicked && (
+        <View style={styles.hotspotFoundDot} />
+      )}
     </TouchableOpacity>
   );
 }
@@ -353,6 +477,14 @@ export default function SceneScreen() {
   
 
   const handleHotspotPress = (hotspot: typeof scene.hotspots[0]) => {
+    
+    if (hotspot.navigatesToScene) {
+      dispatch({ type: 'CLICK_HOTSPOT', payload: hotspot.id });
+      dispatch({ type: 'UNLOCK_SCENE', payload: hotspot.navigatesToScene });
+      router.push(`/scene/${hotspot.navigatesToScene}`);
+      return; // ← on court-circuite tout le reste
+    }
+    
     setActiveHotspot(hotspot);
     setModalVisible(true);
 
@@ -374,6 +506,10 @@ export default function SceneScreen() {
       if (hotspot.unlocksScene) {
         dispatch({ type: 'UNLOCK_SCENE', payload: hotspot.unlocksScene });
       }
+
+      
+
+      
     }
   };
 
@@ -421,7 +557,7 @@ export default function SceneScreen() {
       {/* Instructions */}
       <View style={styles.instructions}>
         <Text style={styles.instructionsText}>
-          👆 Tapez sur les points lumineux pour enquêter • Pincez pour zoomer
+          👆 Explorez l'image en tapant partout • Pincez pour zoomer
         </Text>
       </View>
 
@@ -430,7 +566,7 @@ export default function SceneScreen() {
         <ScrollView style={styles.foundList} showsVerticalScrollIndicator={false}>
           <Text style={styles.foundListTitle}>Indices relevés dans cette scène :</Text>
           {scene.hotspots
-            .filter(h => state.clickedHotspots[h.id])
+            .filter(h => state.clickedHotspots[h.id] && !h.navigatesToScene)
             .map(h => (
               <TouchableOpacity
                 key={h.id}
@@ -485,24 +621,53 @@ const styles = StyleSheet.create({
     width: W, overflow: 'hidden', position: 'relative',
     backgroundColor: '#0a0a0f',
   },
-  imageInner: { width: W },
+  imageInner: { width: W, height: IMAGE_H , overflow: 'hidden' }, 
   imageBg: {
-    width: W, justifyContent: 'center', alignItems: 'center',
-    position: 'relative',
+     width: W,
+  height: IMAGE_H,       // ← s'assurer que la hauteur est fixée ici aussi
+  justifyContent: 'center',
+  alignItems: 'center',
+  position: 'relative',
+  overflow: 'hidden',  
   },
   bgEmoji: { fontSize: 120, opacity: 0.18 },
 
-  hotspot: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
+  hotspot: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
   hotspotBubble: {
     borderWidth: 2, borderColor: C.gold,
     backgroundColor: 'rgba(201,168,76,0.2)',
     justifyContent: 'center', alignItems: 'center',
     position: 'relative',
   },
+  
+
+   hotspotFlash: {
+    position: 'absolute',
+    backgroundColor: 'rgba(201,168,76,0.45)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(201,168,76,0.8)',
+  },
+  // Petit point discret pour indiquer "déjà exploré"
+  hotspotFoundDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(39,174,96,0.6)',
+  },
+
   hotspotCheck: {
     position: 'absolute', top: 0, right: 0,
     width: 14, height: 14, borderRadius: 7,
-    backgroundColor: C.success, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: C.success,
+    justifyContent: 'center', alignItems: 'center',
   },
 
   resetZoomBtn: {
@@ -510,6 +675,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 8, borderWidth: 1, borderColor: C.border,
     paddingHorizontal: 10, paddingVertical: 5,
+  },
+  hotspotHitArea: {
+    position: 'absolute',
+    // Complètement transparent — juste pour absorber le tap
+    // backgroundColor: 'transparent',
+     backgroundColor: 'red',
+
   },
   resetZoomText: { color: C.muted, fontSize: 11 },
 
@@ -547,6 +719,29 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, borderColor: C.goldDark,
     padding: 8, marginBottom: 16, alignSelf: 'flex-start',
   },
+
+  doorBubble: {
+    width: 70, height: 110,
+    borderRadius: 10,
+    borderWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(201,168,76,0.6)',
+    backgroundColor: 'rgba(201,168,76,0.1)',
+    justifyContent: 'flex-end', alignItems: 'center',
+    paddingBottom: 10, gap: 4,
+  },
+  doorEmoji: { fontSize: 30 },
+  doorLabel: {
+    color: 'rgba(232,217,181,0.7)',
+    fontSize: 9, textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  arrowBubble: {
+    width: 52, height: 52, borderRadius: 26,
+    borderWidth: 2, borderColor: 'rgba(201,168,76,0.5)',
+    backgroundColor: 'rgba(201,168,76,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  
   newBadgeText: { color: C.gold, fontSize: 11, letterSpacing: 2 },
 
   modalEmoji: { fontSize: 44, marginBottom: 8 },
@@ -563,9 +758,8 @@ const styles = StyleSheet.create({
   modalDiscoveryTitle: { color: C.gold, fontSize: 13, fontWeight: '700', marginBottom: 8 },
   modalDiscoveryContent: { color: C.parchment, fontSize: 13, lineHeight: 21, fontStyle: 'italic' },
  sceneImage: {
-  width: W,
-  height: IMAGE_H,
-  position: 'absolute',
+  width: '100%',
+  height: '100%',
 },
   modalCloseBtn: {
     backgroundColor: C.gold, borderRadius: 12,

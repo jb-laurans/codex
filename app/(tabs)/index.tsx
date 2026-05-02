@@ -267,7 +267,7 @@ resetBtnText: {
     paddingLeft: 4,
     borderLeftWidth: 2,
     borderLeftColor: C.goldDark,
-    paddingLeft: 10,
+    
   },
   chapterLocked: {
     backgroundColor: C.surface,

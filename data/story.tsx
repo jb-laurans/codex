@@ -20,11 +20,14 @@ export type Hotspot = {
   // Position en % de la largeur/hauteur de l'image (0-100)
   x: number;
   y: number;
+  minZoom?: 2,
   size?: number;          // diamètre du point cliquable (défaut 48)
   label: string;
   hint: string;           // texte court affiché au tap
   discovery?: Discovery;  // si défini → auto-enregistré dans le carnet
   unlocksScene?: string;  // débloque une scène après tap
+  navigatesToScene?: string; 
+  navigationStyle?: 'door' | 'arrow' | 'hotspot'; 
   emoji?: string;
 };
 
@@ -109,6 +112,7 @@ export const SCENES: Scene[] = [
         x: 25, y: 45,
         emoji: '📚',
         label: 'Bureau en désordre',
+        minZoom: 2,
         hint: 'Des notes éparpillées… l\'une porte la date du 15 avril 1497.',
         discovery: {
           id: 'disc_note_1497',
@@ -159,6 +163,25 @@ export const SCENES: Scene[] = [
         },
         unlocksScene: 'scene_bibliotheque',
       },
+      // {
+      //     id: 'hs_porte_jardin',
+      //     x: 25, y: 70,
+      //     emoji: '🚪',
+      //     label: 'Vers le jardin',
+      //     hint: 'Pousser la porte...',
+      //     navigationStyle: 'door',          // ← rectangle dashed
+      //     navigatesToScene: 'scene_jardin',
+      //   },
+        // ou avec une flèche :
+        {
+          id: 'hs_sortie',
+          x: 90, y: 50,
+          emoji: '➡️',
+          navigationStyle: 'arrow',         // ← cercle avec flèche
+          label: 'Sortir',
+          hint: 'Quitter cette pièce.',
+          navigatesToScene: 'scene_bibliotheque',
+        },
       {
         id: 'hs_livre',
         x: 45, y: 65,
